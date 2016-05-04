@@ -1,16 +1,21 @@
 package club.dcoin.dcoinlite
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.AsyncTask
+import android.os.Build
 import android.support.v4.app.Fragment
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.support.v4.app.ActivityCompat
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -21,10 +26,9 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.FileOutputStream
+import java.io.*
+import java.net.CookieHandler
+import java.net.CookiePolicy
 import java.net.URL
 import java.util.regex.Pattern
 
@@ -35,6 +39,30 @@ class MainActivityFragment : Fragment() {
     var webView: WebView? = null
     val httpClient = OkHttpClient()
     var mUploadHandler: UploadHandler? = null
+    var address: String? = null
+    private val REQUEST_EXTERNAL_STORAGE = 1
+    private val PERMISSIONS_STORAGE = arrayOf(
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+
+
+    /**
+     * Checks if the app has permission to write to device storage
+     *
+     * If the app does not has permission then the user will be prompted to grant permissions
+     *
+     * @param activity
+     */
+    fun verifyStoragePermissions(activity: Activity) {
+        // Check if we have write permission
+        val permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            // We don't have permission so prompt the user
+            ActivityCompat.requestPermissions(activity, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE)
+        }
+    }
 
     override fun onCreateView(inflater: LayoutInflater?, container: ViewGroup?,
                               savedInstanceState: Bundle?): View? {
@@ -45,7 +73,7 @@ class MainActivityFragment : Fragment() {
         webView?.setWebChromeClient(CustomChromeClient())
         initializeWebView()
         WebAsyncRequest().execute("http://getpool.dcoin.club")
-
+        verifyStoragePermissions(activity)
         return view
     }
 
@@ -90,44 +118,88 @@ class MainActivityFragment : Fragment() {
         override fun onPostExecute(result: String?) {
             super.onPostExecute(result)
             Log.d("MainActivityFragment", "onCreateView $result")
+            address = result
             webView?.loadUrl(result)
         }
     }
 
     inner class CustomWebClient : WebViewClient() {
-        override fun onPageStarted(view: WebView?, url: String, favicon: Bitmap?) {
-            super.onPageStarted(view, url, favicon)
-            val p = Pattern.compile("dcoinKey&password=(.*)$")
-            val m = p.matcher(url)
-            if (m.find()) {
+
+        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            Log.d("JavaGoWV: URL =", url)
+
+            if (url.contains("dcoinKey", true)) {
+                Log.d("JavaGoWV: FOUND =", url)
                 try {
                     val thread = Thread(Runnable {
                         try {
                             //File root = android.os.Environment.getExternalStorageDirectory();
-                            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-
-                            val keyUrl = URL("http://pool.dcoin.club/ajax?controllerName=dcoinKey&first=1")
+                            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+                            Log.d("JavaGoWV", "dir " + dir)
+                            val uri = Uri.parse("$url&ios=1&first=1")
+                            val keyUrl = URL(uri.toString()) //you can write here any link
+                            //URL keyUrl = new URL("http://yandex.ru/"); //you can write here any link
                             val file = File(dir, "dcoin-key.png")
+
+                            Log.d("JavaGoWV", "download begining")
+                            Log.d("JavaGoWV", "download keyUrl:" + keyUrl)
 
                             /* Open a connection to that URL. */
                             val ucon = keyUrl.openConnection()
 
-                            val inputStream = ucon.inputStream
+                            val cookie = CookieManager.getInstance().getCookie(url)
+                            Log.d("JavaGoWV", cookie)
 
-                            val bis = BufferedInputStream(inputStream)
+                            ucon.addRequestProperty("Cookie", cookie)
+                            Log.d("JavaGoWV", "0")
+                            /*
+                            * Define InputStreams to read from the URLConnection.
+                            */
+                            val `is` = ucon.inputStream
 
-                            val baf = ByteArrayOutputStream(5000)
-                            var current: Int = 0
-                            while ({ current = bis.read(); current}() != -1) {
-                                baf.write(current)
-                            }
+                            Log.d("JavaGoWV", "01")
 
-                            /* Convert the Bytes read to a String. */
+                            val bis = BufferedInputStream(`is`)
+
+                            Log.d("JavaGoWV", "1")
+                            /*
+                            * Read bytes to the Buffer until there is nothing more to read(-1).
+                            */
+//                            var baf = ByteArrayInputStream(5000)
+//                            var current = 0
+//                            while ({current = bis.read(); current}() != -1) {
+//                                baf.write(current)
+//                                current = bis.read()
+//                            }
+//
+//                            /* Convert the Bytes read to a String. */
+                            val bitmap = BitmapFactory.decodeStream(`is`)
                             val fos = FileOutputStream(file)
-                            fos.write(baf.toByteArray())
+                            Log.d("JavaGoWV", bitmap.toString())
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos)
+
+//                            fos.write(baf.toByteArray())
                             fos.flush()
                             fos.close()
+
+                            Log.d("JavaGoWV", "3")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                val mediaScanIntent = Intent(
+                                        Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+                                val contentUri = Uri.fromFile(file)
+                                mediaScanIntent.data = contentUri
+                                this@MainActivityFragment.activity.sendBroadcast(mediaScanIntent)
+                            } else {
+                                val fileUri = "file://" + Environment.getExternalStorageDirectory().absolutePath
+                                print("File: ${fileUri.toString()}")
+                                this@MainActivityFragment.activity.sendBroadcast(Intent(
+                                        Intent.ACTION_MEDIA_MOUNTED,
+                                        Uri.parse(fileUri)))
+                            }
+
+                            Log.d("JavaGoWV", "4")
                         } catch (e: Exception) {
+                            Log.e("JavaGoWV error 0", e.toString())
                             e.printStackTrace()
                         }
                     })
@@ -135,8 +207,10 @@ class MainActivityFragment : Fragment() {
 
 
                 } catch (e: Exception) {
+                    Log.e("JavaGoWV error", e.toString())
                     e.printStackTrace()
                 }
+
             }
         }
 
@@ -145,12 +219,16 @@ class MainActivityFragment : Fragment() {
             Log.e("JavaGoWV", "shouldOverrideUrlLoading " + url)
 
             if (url.endsWith(".mp4")) {
-                val intetnt = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                startActivity(intetnt)
+                val `in` = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                startActivity(`in`)
                 return true
             } else {
                 return false
             }
+        }
+
+        override fun onReceivedError(view: WebView, errorCode: Int, description: String, failingUrl: String) {
+            Log.d("JavaGoWV", "failed: $failingUrl, error code: $errorCode [$description]")
         }
 
     }
@@ -168,7 +246,9 @@ class MainActivityFragment : Fragment() {
             callback.invoke(origin, true, false)
         }
 
+
         private fun getTitleFromUrl(url: String): String {
+            val title = url
             try {
                 val urlObj = URL(url)
                 val host = urlObj.host
@@ -185,11 +265,18 @@ class MainActivityFragment : Fragment() {
                 // ignore
             }
 
-            return url
+            return title
         }
 
 
+        fun onLoadStarted(view: WebView, url: String) {
+            Log.d("Go", "WebView onLoadStarted: " + url)
+        }
+
         override fun onJsAlert(view: WebView, url: String, message: String, result: JsResult): Boolean {
+
+            if (message.contains("location")) return false
+
             val newTitle = getTitleFromUrl(url)
 
             AlertDialog.Builder(this@MainActivityFragment.activity).setTitle(newTitle).setMessage(message).setPositiveButton(android.R.string.ok) { dialog, which -> result.confirm() }.setCancelable(false).create().show()
@@ -210,17 +297,12 @@ class MainActivityFragment : Fragment() {
             // return super.onJsConfirm(view, url, message, result);
         }
 
-        // Android 3.0
-        @JvmOverloads fun openFileChooser(uploadMsg: ValueCallback<Uri>, acceptType: String = "") {
-            openFileChooser(uploadMsg, "", "filesystem")
-        }
-
         // Android 4.1
-        fun openFileChooser(uploadMsg: ValueCallback<Uri>, acceptType: String, capture: String) {
+        fun openFileChooser(uploadMsg: ValueCallback<Uri>, acceptType: String = "", capture: String) {
             mUploadHandler = UploadHandler(Controller())
             mUploadHandler!!.openFileChooser(uploadMsg, acceptType, capture)
         }
-    }// Android 2.x
+    }
 
     inner class Controller {
 
@@ -237,12 +319,18 @@ class MainActivityFragment : Fragment() {
          * The Object used to inform the WebView of the file to upload.
          */
         private var mUploadMessage: ValueCallback<Uri>? = null
-        private var mCameraFilePath: String? = null
+        var filePath: String? = null
+            private set
         private var mHandled: Boolean = false
         private var mCaughtActivityNotFoundException: Boolean = false
+        fun handled(): Boolean {
+            return mHandled
+        }
 
         fun onResult(resultCode: Int, intent: Intent?) {
             if (resultCode == Activity.RESULT_CANCELED && mCaughtActivityNotFoundException) {
+                // Couldn't resolve an activity, we are going to try again so skip
+                // this result.
                 mCaughtActivityNotFoundException = false
                 return
             }
@@ -250,8 +338,14 @@ class MainActivityFragment : Fragment() {
                 null
             else
                 intent.data
+            // As we ask the camera to save the result of the user taking
+            // a picture, the camera application does not return anything other
+            // than RESULT_OK. So we need to check whether the file we expected
+            // was written to disk in the in the case that we
+            // did not get an intent returned but did get a RESULT_OK. If it was,
+            // we assume that this result has came back from the camera.
             if (result == null && intent == null && resultCode == Activity.RESULT_OK) {
-                val cameraFile = File(mCameraFilePath)
+                val cameraFile = File(filePath)
                 if (cameraFile.exists()) {
                     result = Uri.fromFile(cameraFile)
                     // Broadcast to the media scanner that we have a new photo
@@ -294,6 +388,10 @@ class MainActivityFragment : Fragment() {
 
             Log.d("JavaGoWV", "openFileChooser 1 ")
             if (capture == mediaSourceValueFileSystem) {
+                // To maintain backwards compatibility with the previous implementation
+                // of the media capture API, if the value of the 'capture' attribute is
+                // "filesystem", we should examine the accept-type for a MIME type that
+                // may specify a different capture value.
                 for (p in params) {
                     val keyValue = p.split("=".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
                     if (keyValue.size == 2) {
@@ -306,12 +404,19 @@ class MainActivityFragment : Fragment() {
             }
             Log.d("JavaGoWV", "openFileChooser 2 ")
             //Ensure it is not still set from a previous upload.
-            mCameraFilePath = null
+            filePath = null
             if (mimeType == imageMimeType) {
                 if (mediaSource == mediaSourceValueCamera) {
+                    Log.d("JavaGoWV", "001")
+                    // Specified 'image/*' and requested the camera, so go ahead and launch the
+                    // camera directly.
                     startActivity(createCameraIntent())
                     return
                 } else {
+                    // Specified just 'image/*', capture=filesystem, or an invalid capture parameter.
+                    // In all these cases we show a traditional picker filetered on accept type
+                    // so launch an intent for both the Camera and image/* OPENABLE.
+                    Log.d("JavaGoWV", "chooser 4")
                     val chooser = createChooserIntent(createCameraIntent())
                     chooser.putExtra(Intent.EXTRA_INTENT, createOpenableIntent(imageMimeType))
                     startActivity(chooser)
@@ -319,9 +424,15 @@ class MainActivityFragment : Fragment() {
                 }
             } else if (mimeType == videoMimeType) {
                 if (mediaSource == mediaSourceValueCamcorder) {
+                    // Specified 'video/*' and requested the camcorder, so go ahead and launch the
+                    // camcorder directly.
                     startActivity(createCamcorderIntent())
                     return
                 } else {
+                    // Specified just 'video/*', capture=filesystem or an invalid capture parameter.
+                    // In all these cases we show an intent for the traditional file picker, filtered
+                    // on accept type so launch an intent for both camcorder and video/* OPENABLE.
+                    Log.d("JavaGoWV", "chooser 3")
                     val chooser = createChooserIntent(createCamcorderIntent())
                     chooser.putExtra(Intent.EXTRA_INTENT, createOpenableIntent(videoMimeType))
                     startActivity(chooser)
@@ -329,29 +440,44 @@ class MainActivityFragment : Fragment() {
                 }
             } else if (mimeType == audioMimeType) {
                 if (mediaSource == mediaSourceValueMicrophone) {
+                    // Specified 'audio/*' and requested microphone, so go ahead and launch the sound
+                    // recorder.
                     startActivity(createSoundRecorderIntent())
                     return
                 } else {
+                    // Specified just 'audio/*',  capture=filesystem of an invalid capture parameter.
+                    // In all these cases so go ahead and launch an intent for both the sound
+                    // recorder and audio/* OPENABLE.
+                    Log.d("JavaGoWV", "chooser 2")
                     val chooser = createChooserIntent(createSoundRecorderIntent())
                     chooser.putExtra(Intent.EXTRA_INTENT, createOpenableIntent(audioMimeType))
                     startActivity(chooser)
                     return
                 }
             }
+            // No special handling based on the accept type was necessary, so trigger the default
+            // file upload chooser.
             Log.d("JavaGoWV", "createDefaultOpenableIntent")
+            /*
+			Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+			Uri uri = Uri.parse(Environment.getExternalStorageDirectory().getPath()
+					+ "/Android/data/org.golang.app/files/");
+			Log.d("JavaGoWV", "path ="+Environment.getExternalStorageDirectory().getPath() + "/Android/data/org.golang.app/files/");
+			intent.setDataAndType(uri, "**");
+			//startActivity(Intent.createChooser(intent, "Open folder"));*/
             startActivity(createDefaultOpenableIntent())
         }
 
         private fun startActivity(intent: Intent) {
             try {
-                mController.activity.startActivityForResult(intent, Controller.Result.FILE_SELECTED)
+                mController.activity.startActivityForResult(intent, MainActivityFragment.Controller.Result.FILE_SELECTED)
             } catch (e: ActivityNotFoundException) {
                 // No installed app was able to handle the intent that
                 // we sent, so fallback to the default file upload control.
                 try {
                     mCaughtActivityNotFoundException = true
                     mController.activity.startActivityForResult(createDefaultOpenableIntent(),
-                            Controller.Result.FILE_SELECTED)
+                            MainActivityFragment.Controller.Result.FILE_SELECTED)
                 } catch (e2: ActivityNotFoundException) {
                     // Nothing can return us a file, so file upload is effectively disabled.
                     Toast.makeText(mController.activity, "Upload disabled",
@@ -363,6 +489,9 @@ class MainActivityFragment : Fragment() {
         }
 
         private fun createDefaultOpenableIntent(): Intent {
+            // Create and return a chooser with the default OPENABLE
+            // actions including the camera, camcorder and sound
+            // recorder where available.
             val i = Intent(Intent.ACTION_GET_CONTENT)
             i.addCategory(Intent.CATEGORY_OPENABLE)
             i.type = "*/*"
@@ -376,9 +505,13 @@ class MainActivityFragment : Fragment() {
         }
 
         private fun createChooserIntent(vararg intents: Intent): Intent {
+
+            Log.d("JavaGoWV", "createChooserIntent")
             val chooser = Intent(Intent.ACTION_CHOOSER)
             chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, intents)
-            chooser.putExtra(Intent.EXTRA_TITLE, "Choose file to upload")
+            chooser.putExtra(Intent.EXTRA_TITLE,
+                    "Choose upload")
+            Log.d("JavaGoWV", "return chooser")
             return chooser
         }
 
@@ -396,9 +529,9 @@ class MainActivityFragment : Fragment() {
             val cameraDataDir = File(externalDataDir.absolutePath +
                     File.separator + "browser-photos")
             cameraDataDir.mkdirs()
-            mCameraFilePath = cameraDataDir.absolutePath + File.separator +
+            filePath = cameraDataDir.absolutePath + File.separator +
                     System.currentTimeMillis() + ".jpg"
-            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(File(mCameraFilePath)))
+            cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(File(filePath)))
             return cameraIntent
         }
 
