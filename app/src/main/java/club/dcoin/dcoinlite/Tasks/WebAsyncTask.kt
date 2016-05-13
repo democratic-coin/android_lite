@@ -16,14 +16,19 @@ import okhttp3.Request
 class WebAsyncRequest(val httpClient: OkHttpClient, val webView: WebView): AsyncTask<String, Int, String>() {
 
     override fun doInBackground(vararg params: String?): String? {
-        val request = Request.Builder().url(params[0]).build()
-        val response = httpClient.newCall(request).execute()
+        try {
+            val request = Request.Builder().url(params[0]).build()
+            val response = httpClient.newCall(request).execute()
 
-        val gson = Gson()
-        val json = gson.fromJson(response.body().string(), JsonObject::class.java)
-        val pool = json.get("pool").asString
+            val gson = Gson()
+            val json = gson.fromJson(response.body().string(), JsonObject::class.java)
+            val pool = json.get("pool").asString
+            return pool
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-        return pool
+        return "localhost"
     }
 
     override fun onPostExecute(result: String?) {

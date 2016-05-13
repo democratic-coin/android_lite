@@ -42,6 +42,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (intent == null) {
+            Log.d("JavaGoWV", "Intent is null")
+        }
         super.onActivityResult(requestCode, resultCode, data)
         Log.d("JavaGoWV", "Actual activity onActivityResult")
     }

@@ -1,9 +1,11 @@
 package club.dcoin.dcoinlite
 
 import android.Manifest
+import android.annotation.TargetApi
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -13,6 +15,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.support.v4.app.ActivityCompat
 import android.support.v4.app.Fragment
+import android.support.v4.content.FileProvider
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -21,6 +24,7 @@ import android.webkit.*
 import android.widget.Toast
 import club.dcoin.dcoinlite.Tasks.SaveImageTask
 import club.dcoin.dcoinlite.Tasks.WebAsyncRequest
+import kotlinx.android.synthetic.main.content_main.*
 import okhttp3.OkHttpClient
 import java.io.File
 import java.net.URL
@@ -32,6 +36,7 @@ class MainActivityFragment : Fragment() {
     var webView: WebView? = null
     val httpClient = OkHttpClient()
     var mUploadHandler: UploadHandler? = null
+    var mNewUploaderHandler: NewUploadHandler? = null
     private val REQUEST_EXTERNAL_STORAGE = 1
     private val PERMISSIONS_STORAGE = arrayOf(
         Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -66,16 +71,21 @@ class MainActivityFragment : Fragment() {
         initializeWebView()
         WebAsyncRequest(httpClient, webView!!).execute("http://getpool.dcoin.club")
         verifyStoragePermissions(activity)
+//        webView?.loadUrl("http://imgland.net")
         return view
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent) {
-        Log.d("JavaGoWV", "Actual fragment onActivityResult")
-        if (requestCode == Controller.Result.FILE_SELECTED) {
+    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
+        Log.d("JavaGoWV", "Actual fragment onActivityResult $intent")
+        if (requestCode == Controller.Result.FILE_SELECTED && intent != null) {
             Log.d("JavaGoWV", "onActivityResult file selected")
             if (mUploadHandler != null) {
                 Log.d("JavaGoWV", "mUploadHandler is not null")
                 mUploadHandler!!.onResult(resultCode, intent)
+            }
+            if (mNewUploaderHandler != null) {
+                Log.d("JavaGoWV", "mNewUploadHandler is not null")
+                mNewUploaderHandler!!.onResult(resultCode, intent)
             }
         }
 
@@ -198,15 +208,20 @@ class MainActivityFragment : Fragment() {
         }
 
         // Android 4.1
+        @JvmOverloads
         fun openFileChooser(uploadMsg: ValueCallback<Uri>, acceptType: String = "", capture: String) {
+            Log.d("JavaGoWV", "openFileChooser")
             mUploadHandler = UploadHandler(Controller(activity))
             mUploadHandler!!.openFileChooser(uploadMsg, acceptType, capture)
         }
 
+        @TargetApi(21)
         override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
-            mUploadHandler = UploadHandler(Controller(activity))
-            mUploadHandler!!.openFileChooser(filePathCallback as ValueCallback<Uri>, fileChooserParams!!.acceptTypes[0], "image/*")
-            return super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+            Log.d("JavaGoWV", "onShowFileChooser")
+            mNewUploaderHandler = NewUploadHandler(Controller(activity))
+            mNewUploaderHandler!!.openFileChooser(filePathCallback!!, fileChooserParams!!)
+
+            return true
         }
     }
 
@@ -224,10 +239,7 @@ class MainActivityFragment : Fragment() {
         var filePath: String? = null
             private set
         private var mHandled: Boolean = false
-        private var mCaughtActivityNotFoundException: Boolean = false
-        fun handled(): Boolean {
-            return mHandled
-        }
+        private var mCaughtActivityNotFoundException = false
 
         fun onResult(resultCode: Int, intent: Intent?) {
             Log.d("JavaGoWV", "onResult resultCode = $resultCode")
@@ -344,6 +356,137 @@ class MainActivityFragment : Fragment() {
             cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(File(filePath)))
             return cameraIntent
         }
+    }
+
+    inner class NewUploadHandler(private val mController: Controller) {
+        /*
+         * The Object used to inform the WebView of the file to upload.
+         */
+        var uploadMessage: ValueCallback<Array<Uri>>? = null
+        private var mHandled: Boolean = false
+        private var mParams: WebChromeClient.FileChooserParams? = null
+        private var mCapturedMedia: Uri? = null
+
+        fun onResult(resultCode: Int, intent: Intent) {
+            val uris: Array<Uri>?
+            Log.d("JavaGoWV", "onResult $resultCode")
+            // As the media capture is always supported, we can't use
+            // FileChooserParams.parseResult().
+            uris = parseResult(resultCode, intent)
+            if (uploadMessage == null || uris == null) {
+                return
+            }
+            uploadMessage!!.onReceiveValue(uris)
+            mHandled = true
+        }
+
+        fun openFileChooser(callback: ValueCallback<Array<Uri>>, chooserParams: WebChromeClient.FileChooserParams) {
+            Log.d("JavaGoWV", "onResult $chooserParams $uploadMessage")
+            if (uploadMessage != null) {
+                // Already a file picker operation in progress.
+                return
+            }
+            uploadMessage = callback
+            mParams = chooserParams
+            val captureIntents = createCaptureIntent()
+            assert(captureIntents != null && captureIntents.size > 0)
+            var intent: Intent?
+            // Go to the media capture directly if capture is specified, this is the
+            // preferred way.
+            if (chooserParams.isCaptureEnabled && captureIntents!!.size == 1) {
+                intent = captureIntents[0]
+            } else {
+                intent = Intent(Intent.ACTION_CHOOSER)
+                intent.putExtra(Intent.EXTRA_INITIAL_INTENTS, captureIntents)
+                intent.putExtra(Intent.EXTRA_INTENT, chooserParams.createIntent())
+            }
+            startActivity(intent)
+        }
+
+        private fun parseResult(resultCode: Int, intent: Intent?): Array<Uri>? {
+            if (resultCode == Activity.RESULT_CANCELED) {
+                return null
+            }
+            var result: Uri? = if (intent == null || resultCode != Activity.RESULT_OK)
+                null
+            else
+                intent.data
+            // As we ask the camera to save the result of the user taking
+            // a picture, the camera application does not return anything other
+            // than RESULT_OK. So we need to check whether the file we expected
+            // was written to disk in the in the case that we
+            // did not get an intent returned but did get a RESULT_OK. If it was,
+            // we assume that this result has came back from the camera.
+            if (result == null && intent == null && resultCode == Activity.RESULT_OK
+                    && mCapturedMedia != null) {
+                result = mCapturedMedia
+            }
+
+            var uris: Array<Uri>? = null
+            if (result != null) {
+                uris = arrayOf(result)
+            }
+            return uris
+        }
+
+        private fun startActivity(intent: Intent) {
+            try {
+                this@MainActivityFragment.startActivityForResult(intent, MainActivityFragment.Controller.Result.FILE_SELECTED)
+            } catch (e: ActivityNotFoundException) {
+                // No installed app was able to handle the intent that
+                // we sent, so file upload is effectively disabled.
+                Toast.makeText(mController.activity, R.string.uploads_disabled,
+                        Toast.LENGTH_LONG).show()
+            }
+
+        }
+
+        private fun createCaptureIntent(): Array<Intent>? {
+            var mimeType = "*/*"
+            val acceptTypes = mParams!!.acceptTypes
+            if (acceptTypes != null && acceptTypes.size > 0) {
+                mimeType = acceptTypes[0]
+            }
+            val intents: Array<Intent>
+            if (mimeType == IMAGE_MIME_TYPE) {
+                intents = arrayOf(createCameraIntent(createTempFileContentUri(".jpg")))
+            } else {
+                intents = arrayOf(
+                        createCameraIntent(createTempFileContentUri(".jpg"))
+                )
+            }
+            return intents
+        }
+
+        private fun createTempFileContentUri(suffix: String): Uri {
+            try {
+                val mediaPath = File(mController.activity.filesDir, "captured_media")
+                if (!mediaPath.exists() && !mediaPath.mkdir()) {
+                    throw RuntimeException("Folder cannot be created.")
+                }
+                val mediaFile = File.createTempFile(
+                        System.currentTimeMillis().toString(), suffix, mediaPath)
+                return FileProvider.getUriForFile(mController.activity,
+                        FILE_PROVIDER_AUTHORITY, mediaFile)
+            } catch (e: java.io.IOException) {
+                throw RuntimeException(e)
+            }
+
+        }
+
+        private fun createCameraIntent(contentUri: Uri?): Intent {
+            if (contentUri == null) throw IllegalArgumentException()
+            mCapturedMedia = contentUri
+            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, mCapturedMedia)
+            intent.clipData = ClipData.newUri(mController.activity.contentResolver,
+                    FILE_PROVIDER_AUTHORITY, mCapturedMedia)
+            return intent
+        }
+
+        private val IMAGE_MIME_TYPE = "image/*"
+        private val FILE_PROVIDER_AUTHORITY = "club.dcoin.dcoinlite.file"
     }
 }
 
