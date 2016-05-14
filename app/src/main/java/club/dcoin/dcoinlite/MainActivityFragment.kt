@@ -68,15 +68,11 @@ class MainActivityFragment : Fragment() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
-        Log.d("JavaGoWV", "Actual fragment onActivityResult $intent")
         if (requestCode == Result.FILE_SELECTED && intent != null) {
-            Log.d("JavaGoWV", "onActivityResult file selected")
             if (mUploadHandler != null) {
-                Log.d("JavaGoWV", "mUploadHandler is not null")
                 mUploadHandler!!.onResult(resultCode, intent)
             }
             if (mNewUploaderHandler != null) {
-                Log.d("JavaGoWV", "mNewUploadHandler is not null")
                 mNewUploaderHandler!!.onResult(resultCode, intent)
             }
         }
@@ -102,17 +98,12 @@ class MainActivityFragment : Fragment() {
     inner class CustomWebClient : WebViewClient() {
 
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-            Log.d("JavaGoWV: URL =", url)
-
             if (url.contains("dcoinKey", true)) {
                 SaveImageTask(activity).execute(url)
             }
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-
-            Log.e("JavaGoWV", "shouldOverrideUrlLoading " + url)
-
             if (url.endsWith(".mp4")) {
                 val `in` = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 startActivity(`in`)
@@ -197,14 +188,12 @@ class MainActivityFragment : Fragment() {
         // Android 4.1
         @JvmOverloads
         fun openFileChooser(uploadMsg: ValueCallback<Uri>, acceptType: String = "", capture: String) {
-            Log.d("JavaGoWV", "openFileChooser")
             mUploadHandler = UploadHandler(this@MainActivityFragment)
             mUploadHandler!!.openFileChooser(uploadMsg)
         }
 
         @TargetApi(21)
         override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
-            Log.d("JavaGoWV", "onShowFileChooser")
             mNewUploaderHandler = NewUploadHandler(this@MainActivityFragment)
             mNewUploaderHandler!!.openFileChooser(filePathCallback!!, fileChooserParams!!)
 

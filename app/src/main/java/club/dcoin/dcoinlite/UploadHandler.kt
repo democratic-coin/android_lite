@@ -14,7 +14,6 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.support.v4.app.Fragment
 import android.support.v4.content.FileProvider
-import android.util.Log
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.widget.Toast
@@ -42,7 +41,6 @@ class UploadHandler(private val fragment: Fragment) {
     private var mCaughtActivityNotFoundException = false
 
     fun onResult(resultCode: Int, intent: Intent?) {
-        Log.d("JavaGoWV", "onResult resultCode = $resultCode")
         if (resultCode == Activity.RESULT_CANCELED || mCaughtActivityNotFoundException) {
             // Couldn't resolve an activity, we are going to try again so skip
             // this result.
@@ -77,9 +75,6 @@ class UploadHandler(private val fragment: Fragment) {
     }
 
     fun openFileChooser(uploadMsg: ValueCallback<Uri>) {
-
-        Log.d("JavaGoWV", "openFileChooser ValueCallback")
-
         val imageMimeType = "image/*"
 
         mUploadMessage = uploadMsg
@@ -92,18 +87,14 @@ class UploadHandler(private val fragment: Fragment) {
 
     private fun startActivity(intent: Intent) {
         try {
-            Log.d("JavaGoWV", "startActivity 0")
             fragment.startActivityForResult(intent, Result.FILE_SELECTED)
         } catch (e: ActivityNotFoundException) {
-            Log.d("JavaGoWV", "startActivity exception 0")
             try {
-                Log.d("JavaGoWV", "startActivity 1")
                 mCaughtActivityNotFoundException = true
                 fragment.activity.startActivityForResult(createDefaultOpenableIntent(),
                         Result.FILE_SELECTED)
             } catch (e2: ActivityNotFoundException) {
                 // Nothing can return us a file, so file upload is effectively disabled.
-                Log.d("JavaGoWV", "startActivity exception 1")
                 Toast.makeText(fragment.activity, "Upload disabled",
                         Toast.LENGTH_LONG).show()
             }
@@ -119,7 +110,6 @@ class UploadHandler(private val fragment: Fragment) {
         i.type = "*/*"
         val uri = Uri.parse(Environment.getExternalStorageDirectory().path + "/download/")
         i.setDataAndType(uri, "*/*")
-        Log.d("JavaGoWV", "chooser 0")
         val chooser = createChooserIntent(createCameraIntent())
         chooser.putExtra(Intent.EXTRA_INTENT, i)
         return chooser
@@ -127,11 +117,9 @@ class UploadHandler(private val fragment: Fragment) {
 
 
     private fun createChooserIntent(vararg intents: Intent): Intent {
-        Log.d("JavaGoWV", "createChooserIntent")
         val chooser = Intent(Intent.ACTION_CHOOSER)
         chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, intents)
         chooser.putExtra(Intent.EXTRA_TITLE, "Choose upload")
-        Log.d("JavaGoWV", "return chooser")
         return chooser
     }
 
@@ -169,7 +157,6 @@ class NewUploadHandler(private val fragment: Fragment) {
 
     fun onResult(resultCode: Int, intent: Intent) {
         val uris: Array<Uri>?
-        Log.d("JavaGoWV", "onResult $resultCode")
         // As the media capture is always supported, we can't use
         // FileChooserParams.parseResult().
         uris = parseResult(resultCode, intent)
@@ -182,7 +169,6 @@ class NewUploadHandler(private val fragment: Fragment) {
 
     @TargetApi(21)
     fun openFileChooser(callback: ValueCallback<Array<Uri>>, chooserParams: WebChromeClient.FileChooserParams) {
-        Log.d("JavaGoWV", "onResult $chooserParams $uploadMessage")
         if (uploadMessage != null) {
             // Already a file picker operation in progress.
             return
@@ -286,6 +272,7 @@ class NewUploadHandler(private val fragment: Fragment) {
                 FILE_PROVIDER_AUTHORITY, mCapturedMedia)
         return intent
     }
+
 
     private val IMAGE_MIME_TYPE = "image/*"
     private val FILE_PROVIDER_AUTHORITY = "club.dcoin.dcoinlite.file"

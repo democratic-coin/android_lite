@@ -1,7 +1,6 @@
 package club.dcoin.dcoinlite.Tasks
 
 import android.os.AsyncTask
-import android.util.Log
 import android.webkit.WebView
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -33,7 +32,6 @@ class WebAsyncRequest(val httpClient: OkHttpClient, val webView: WebView): Async
 
     override fun onPostExecute(result: String?) {
         super.onPostExecute(result)
-        Log.d("MainActivityFragment", "onCreateView $result")
         webView.loadUrl(result)
     }
 }
