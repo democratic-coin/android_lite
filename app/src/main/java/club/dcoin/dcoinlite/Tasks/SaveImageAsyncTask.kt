@@ -8,7 +8,6 @@ import android.net.Uri
 import android.os.AsyncTask
 import android.os.Build
 import android.os.Environment
-import android.util.Log
 import android.webkit.CookieManager
 import android.widget.Toast
 import java.io.File
@@ -26,20 +25,21 @@ class SaveImageTask(val activity: Activity): AsyncTask<String, Int, Unit>() {
         val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
         val url = params[0]
         val uri = Uri.parse("$url&ios=1&first=1")
+
         val keyUrl = URL(uri.toString()) //you can write here any link
         val file = File(dir, "dcoin-key.png")
-
+        if (file.exists()) {
+            file.delete()
+        }
         val ucon = keyUrl.openConnection()
 
         val cookie = CookieManager.getInstance().getCookie(url)
         ucon.addRequestProperty("Cookie", cookie)
-
-        val `is` = ucon.inputStream
-
-        val bitmap = BitmapFactory.decodeStream(`is`)
         val fos = FileOutputStream(file)
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos)
+        val inputStream = ucon.inputStream
 
+        val bitmap = BitmapFactory.decodeStream(inputStream)
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
         fos.flush()
         fos.close()
 
