@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.webkit.*
 import club.dcoin.dcoinlite.Tasks.SaveImageTask
 import club.dcoin.dcoinlite.Tasks.WebAsyncRequest
+import kotlinx.android.synthetic.main.content_main.*
 import okhttp3.OkHttpClient
 import java.net.URL
 
@@ -25,6 +26,10 @@ import java.net.URL
  * A placeholder fragment containing a simple view.
  */
 class MainActivityFragment : Fragment() {
+
+    private val TAG = this@MainActivityFragment.javaClass.canonicalName
+
+    var bundle: Bundle? = null
     var webView: WebView? = null
     val httpClient = OkHttpClient()
     var mUploadHandler: UploadHandler? = null
@@ -67,17 +72,26 @@ class MainActivityFragment : Fragment() {
         return view
     }
 
+
+//    override fun onPause() {
+//        super.onPause()
+//        bundle = Bundle()
+//        webView?.saveState(bundle)
+//    }
+//
+//    override fun onResume() {
+//        super.onResume()
+//        webView?.restoreState(bundle)
+//    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
-        if (requestCode == Result.FILE_SELECTED && intent != null) {
-            if (mUploadHandler != null) {
-                mUploadHandler!!.onResult(resultCode, intent)
-            }
-            if (mNewUploaderHandler != null) {
-                mNewUploaderHandler!!.onResult(resultCode, intent)
-            }
+        Log.d(TAG, "onActivityResult")
+        super.onActivityResult(requestCode, resultCode, intent)
+        if (requestCode == Result.FILE_SELECTED) {
+            mUploadHandler?.onResult(resultCode, intent)
+            mNewUploaderHandler?.onResult(resultCode, intent)
         }
 
-        super.onActivityResult(requestCode, resultCode, intent)
     }
 
 
@@ -194,6 +208,7 @@ class MainActivityFragment : Fragment() {
 
         @TargetApi(21)
         override fun onShowFileChooser(webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?): Boolean {
+           Log.d(TAG, "onShowFileChooser")
             mNewUploaderHandler = NewUploadHandler(this@MainActivityFragment)
             mNewUploaderHandler!!.openFileChooser(filePathCallback!!, fileChooserParams!!)
 

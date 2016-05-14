@@ -14,6 +14,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.support.v4.app.Fragment
 import android.support.v4.content.FileProvider
+import android.util.Log
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.widget.Toast
@@ -147,24 +148,21 @@ class UploadHandler(private val fragment: Fragment) {
 }
 
 class NewUploadHandler(private val fragment: Fragment) {
+    private val TAG = this@NewUploadHandler.javaClass.canonicalName
     /*
      * The Object used to inform the WebView of the file to upload.
      */
     var uploadMessage: ValueCallback<Array<Uri>>? = null
-    private var mHandled: Boolean = false
     private var mParams: WebChromeClient.FileChooserParams? = null
     private var mCapturedMedia: Uri? = null
 
-    fun onResult(resultCode: Int, intent: Intent) {
+    fun onResult(resultCode: Int, intent: Intent?) {
         val uris: Array<Uri>?
         // As the media capture is always supported, we can't use
         // FileChooserParams.parseResult().
         uris = parseResult(resultCode, intent)
-        if (uploadMessage == null || uris == null) {
-            return
-        }
-        uploadMessage!!.onReceiveValue(uris)
-        mHandled = true
+
+        uploadMessage?.onReceiveValue(uris)
     }
 
     @TargetApi(21)
@@ -187,17 +185,12 @@ class NewUploadHandler(private val fragment: Fragment) {
             intent.putExtra(Intent.EXTRA_INITIAL_INTENTS, captureIntents)
             intent.putExtra(Intent.EXTRA_INTENT, chooserParams.createIntent())
         }
+        Log.d(TAG, "startActivity($intent)")
         startActivity(intent)
     }
 
     private fun parseResult(resultCode: Int, intent: Intent?): Array<Uri>? {
-        if (resultCode == Activity.RESULT_CANCELED) {
-            return null
-        }
-        var result: Uri? = if (intent == null || resultCode != Activity.RESULT_OK)
-            null
-        else
-            intent.data
+        var result: Uri? = intent?.data
         // As we ask the camera to save the result of the user taking
         // a picture, the camera application does not return anything other
         // than RESULT_OK. So we need to check whether the file we expected
@@ -240,7 +233,7 @@ class NewUploadHandler(private val fragment: Fragment) {
             intents = arrayOf(createCameraIntent(createTempFileContentUri(".jpg")))
         } else {
             intents = arrayOf(
-                    createCameraIntent(createTempFileContentUri(".txt"))
+                    createCameraIntent(createTempFileContentUri(".png"))
             )
         }
         return intents
