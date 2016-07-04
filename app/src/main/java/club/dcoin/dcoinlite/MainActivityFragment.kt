@@ -68,7 +68,6 @@ class MainActivityFragment : Fragment() {
         initializeWebView()
         WebAsyncRequest(httpClient, webView!!).execute("http://getpool.dcoin.club")
         verifyStoragePermissions(activity)
-//        webView?.loadUrl("http://imgland.net")
         return view
     }
 
@@ -110,17 +109,21 @@ class MainActivityFragment : Fragment() {
 
 
     inner class CustomWebClient : WebViewClient() {
-
+        var poolName: String? = null
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            if (poolName == null) {
+                poolName = url
+            }
+            Log.d(TAG, view.url + " " + url)
             if (url.contains("dcoinKey", true)) {
                 SaveImageTask(activity).execute(url)
             }
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-            if (url.endsWith(".mp4")) {
-                val `in` = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                startActivity(`in`)
+            if (url.endsWith(".mp4") || !url.contains(poolName!!)) {
+                val intent= Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                startActivity(intent)
                 return true
             } else {
                 return false
