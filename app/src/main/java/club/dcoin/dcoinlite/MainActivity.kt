@@ -48,9 +48,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        val mainFragment = fragmentManager.findFragmentById(R.id.fragment) as? MainActivityFragment
-        mainFragment?.onKeyDown()
-        return super.onKeyDown(keyCode, event)
+        return false
     }
 
 }

@@ -50,7 +50,7 @@ class MainActivityFragment : Fragment() {
      */
     fun verifyStoragePermissions(activity: Activity) {
         // Check if we have write permission
-        val permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        val permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
         if (permission != PackageManager.PERMISSION_GRANTED) {
             // We don't have permission so prompt the user
@@ -69,10 +69,6 @@ class MainActivityFragment : Fragment() {
         WebAsyncRequest(httpClient, webView!!).execute("http://getpool.dcoin.club")
         verifyStoragePermissions(activity)
         return view
-    }
-
-    public fun onKeyDown() {
-        webView?.goBack()
     }
 
 //    override fun onPause() {
