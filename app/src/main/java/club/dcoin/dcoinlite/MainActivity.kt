@@ -7,6 +7,7 @@ import android.support.design.widget.Snackbar
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.Toolbar
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.Menu
 import android.view.MenuItem
@@ -45,4 +46,11 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         Log.d("JavaGoWV", "Actual activity onActivityResult")
     }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        val mainFragment = fragmentManager.findFragmentById(R.id.fragment) as? MainActivityFragment
+        mainFragment?.onKeyDown()
+        return super.onKeyDown(keyCode, event)
+    }
+
 }

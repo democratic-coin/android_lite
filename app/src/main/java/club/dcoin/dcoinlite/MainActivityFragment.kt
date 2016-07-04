@@ -71,6 +71,9 @@ class MainActivityFragment : Fragment() {
         return view
     }
 
+    public fun onKeyDown() {
+        webView?.goBack()
+    }
 
 //    override fun onPause() {
 //        super.onPause()
